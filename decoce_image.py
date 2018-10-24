@@ -40,6 +40,8 @@ def draw_image(strokes, shape=(256, 256, 3)):
     image = np.zeros(shape=shape, dtype=np.uint8)
     for stroke in strokes:
         stroke = np.transpose(np.array(stroke))
+        if stroke.shape[1] == 3:
+            stroke = stroke[:, :2]
         stroke = np.int32([stroke])
         cv2.polylines(image, stroke, isClosed=False, color=(255, 255, 255))
     return image
@@ -54,6 +56,7 @@ def save_image(images, category, path_out):
         ax = fig.add_subplot(row, col, i+1)
         ax.imshow(images[i])
     plt.savefig(path_out)
+    plt.close(fig)
 
 
 def list_files(dir):
