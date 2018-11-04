@@ -1,6 +1,7 @@
 import torch
 
 import network
+import MobileNetV2
 from constant import *
 import torchvision
 
@@ -19,6 +20,13 @@ def create_model(pretrained=True, architecture="resnet34", is_train=True):
     elif architecture == "resnet50":
         if pretrained:
             model = torchvision.models.resnet50(pretrained=pretrained)
+            model.fc = torch.nn.Linear(512 * 4, NUM_CATEGORY)
+        else:
+            model = torchvision.models.resnet50(pretrained=pretrained, num_classes=NUM_CATEGORY)
+        model.avgpool = torch.nn.AdaptiveAvgPool2d(1)
+    elif architecture == "mobilenetv2":
+        if pretrained:
+            model = MobileNetV2.MobileNetV2(n_class=NUM_CATEGORY, input_size=IMG_HEIGHT)
             model.fc = torch.nn.Linear(512 * 4, NUM_CATEGORY)
         else:
             model = torchvision.models.resnet50(pretrained=pretrained, num_classes=NUM_CATEGORY)
