@@ -9,6 +9,7 @@ from pprint import pprint
 import numpy as np
 from absl import app, flags
 import torch
+from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -34,6 +35,7 @@ FLAGS = flags.FLAGS
 
 def main(argv=None):
     os.makedirs(FLAGS.model, exist_ok=True)
+    os.makedirs(FLAGS.log, exist_ok=True)
 
     with open(os.path.join(FLAGS.model, 'config.json'), 'w') as f:
         json.dump(FLAGS.flag_values_dict(), f, indent=4, sort_keys=True)
@@ -68,15 +70,17 @@ def main(argv=None):
         model=model, momentum=FLAGS.momentum)
     criterion = torch.nn.NLLLoss()
 
+    writer = SummaryWriter(log_dir=FLAGS.log)
+
     global_step = 0
     for global_epoch in range(FLAGS.epochs):
         global_step = train_epoch(global_step, global_epoch, model, optimizer, criterion,
                 train_dataset_iter, valid_dataset_iter, save_interval=FLAGS.save_interval,
-                valid_subset=FLAGS.valid_subset)
+                valid_subset=FLAGS.valid_subset, writer=writer)
 
 
 def train_epoch(global_step, global_epoch, model, optimizer, criterion,
-                train_dataset_iter, valid_dataset_iter, save_interval=10000, valid_subset=True):
+                train_dataset_iter, valid_dataset_iter, save_interval=10000, valid_subset=True, writer=None):
     """
     1epoch分の学習。学習が終わったらvalidation setのlossを出す
 
@@ -84,8 +88,8 @@ def train_epoch(global_step, global_epoch, model, optimizer, criterion,
     :param global_epoch:
     :param model:
     :param optimizer:
+    :param scheduler:
     :param criterion:
-    :param device:
     :param train_dataset_iter:
     :param valid_dataset_iter:
     :param save_interval:
@@ -96,8 +100,7 @@ def train_epoch(global_step, global_epoch, model, optimizer, criterion,
     for idx_subset, train_dataset in enumerate(train_dataset_iter):
         train_loader = DataLoader(train_dataset, batch_size=FLAGS.batch_size, shuffle=True, num_workers=4)
 
-        local_loss, global_step = train(model, train_loader,
-                                  optimizer, criterion, global_step, save_interval)
+        local_loss, global_step = train(model, train_loader, optimizer, criterion, global_step, save_interval, writer)
 
         merged_loss += local_loss
         print("Training {}/{} in epoch {} (step={}) loss:{:.6f}".format(
@@ -120,7 +123,7 @@ def train_epoch(global_step, global_epoch, model, optimizer, criterion,
     return global_step
 
 
-def train(model, train_loader, optimizer, criterion, global_step=0, save_interval=10000):
+def train(model, train_loader, optimizer, criterion, global_step=0, save_interval=10000, writer=None):
     model.train()
     merged_loss = 0.
     for batch_idx, sample in enumerate(tqdm(train_loader, ascii=True)):
@@ -135,6 +138,10 @@ def train(model, train_loader, optimizer, criterion, global_step=0, save_interva
         global_step += 1
         if global_step % save_interval == 0:
             torch.save(model.state_dict(), os.path.join(FLAGS.model, MODEL_FILEFORMAT.format(global_step)))
+
+        if global_step % 1000 == 0:
+            writer.add_scalar('loss', loss, global_step)
+            writer.add_scalar('lr', optimizer.lr, global_step)
     average_loss = merged_loss / len(train_loader)
     return average_loss, global_step
 

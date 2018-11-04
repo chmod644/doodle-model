@@ -2,6 +2,7 @@ from absl import flags
 
 flags.DEFINE_string("input", "../chunk/train_simplified", "path to input directory", short_name="i")
 flags.DEFINE_string("model", "../output/model", "path to model directory")
+flags.DEFINE_string("log", "../output/log", "path to log directory")
 flags.DEFINE_integer("worker", 4, "num workers of dataloader")
 flags.DEFINE_bool("debug", False, "debug mode")
 flags.DEFINE_enum("archi", "resnet34", enum_values=["resnet34", "resnet50", "mobilenetv2", "original"], help="model architecture")
