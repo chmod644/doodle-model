@@ -8,5 +8,5 @@ flags.DEFINE_enum("archi", "resnet34", enum_values=["resnet34", "resnet50", "ori
 flags.DEFINE_integer("batch_size", 256, help="batch size")
 flags.DEFINE_integer("idx_kfold", 0, "index of k-fold validation")
 flags.DEFINE_integer("kfold", 5, "num split to k-fold validation")
-flags.DEFINE_integer('thickness', 6, "stroke thickness")
-flags.DEFINE_bool('draw_first', True, "whether to draw image before resize")
+flags.DEFINE_integer('thickness', 1, "stroke thickness")
+flags.DEFINE_bool('draw_first', False, "whether to draw image before resize")
