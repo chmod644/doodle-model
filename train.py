@@ -32,6 +32,8 @@ flags.DEFINE_bool('pretrained', False, "whether to use pretrained model")
 
 FLAGS = flags.FLAGS
 
+LOG_INTERVAL = 1000
+
 
 def main(argv=None):
     os.makedirs(FLAGS.model, exist_ok=True)
@@ -126,7 +128,8 @@ def train_epoch(global_step, global_epoch, model, optimizer, criterion,
 def train(model, train_loader, optimizer, criterion, global_step=0, save_interval=10000, writer=None):
     model.train()
     merged_loss = 0.
-    for batch_idx, sample in enumerate(tqdm(train_loader, ascii=True)):
+    pbar = tqdm(train_loader, ascii=True)
+    for batch_idx, sample in enumerate(pbar):
         ids_class, images = sample['y'].to(DEVICE), sample['image'].to(DEVICE)
         optimizer.optimizer.zero_grad()
         output = model(images)
@@ -134,14 +137,17 @@ def train(model, train_loader, optimizer, criterion, global_step=0, save_interva
         loss = criterion(output, ids_class)
         loss.backward()
         merged_loss += loss.item()
-        optimizer.step()
-        global_step += 1
         if global_step % save_interval == 0:
             torch.save(model.state_dict(), os.path.join(FLAGS.model, MODEL_FILEFORMAT.format(global_step)))
-
-        if global_step % 1000 == 0:
+        if global_step % LOG_INTERVAL == 0:
             writer.add_scalar('loss', loss, global_step)
             writer.add_scalar('lr', optimizer.lr, global_step)
+
+        pbar.set_description("step:{}, loss:{:6f}, lr:{:.2e}".format(global_step, loss, optimizer.lr))
+        pbar.update()
+
+        optimizer.step()
+        global_step += 1
     average_loss = merged_loss / len(train_loader)
     return average_loss, global_step
 
