@@ -17,9 +17,13 @@ from model import create_model, DEVICE
 import config
 from constant import *
 from data import DatasetManager
+from util_train import OptimizerManager
 
 flags.DEFINE_integer("epochs", 20, help="num of train epochs")
-flags.DEFINE_float("lr", 0.01, help="learning rate")
+flags.DEFINE_enum("optim", 'adam', ['adam', 'sgd'], help="optimizer")
+flags.DEFINE_float("lr", 0.0001, help="learning rate")
+flags.DEFINE_list("milestones", None, help="decay milestones of learning rate")
+flags.DEFINE_float("lr_decay", 1.0, help="decay factor for learning rate")
 flags.DEFINE_float("momentum", 0.5, help="SGD momentum")
 flags.DEFINE_integer("save_interval", 10000, "inteval of step to save checkpoint")
 flags.DEFINE_bool('valid_subset', True, "whether to validate subset of dataset")
@@ -59,7 +63,9 @@ def main(argv=None):
     with open(os.path.join(FLAGS.model, "model.txt"), 'w') as f:
         print(model, file=f)
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=FLAGS.lr, momentum=FLAGS.momentum)
+    optimizer = OptimizerManager(
+        optimizer=FLAGS.optim, lr=FLAGS.lr, lr_decay=FLAGS.lr_decay, milestones=FLAGS.milestones,
+        model=model, momentum=FLAGS.momentum)
     criterion = torch.nn.NLLLoss()
 
     global_step = 0
@@ -119,7 +125,7 @@ def train(model, train_loader, optimizer, criterion, global_step=0, save_interva
     merged_loss = 0.
     for batch_idx, sample in enumerate(tqdm(train_loader, ascii=True)):
         ids_class, images = sample['y'].to(DEVICE), sample['image'].to(DEVICE)
-        optimizer.zero_grad()
+        optimizer.optimizer.zero_grad()
         output = model(images)
         output = torch.nn.functional.log_softmax(output, 1)
         loss = criterion(output, ids_class)
