@@ -29,9 +29,12 @@ class DatasetContainer(object):
     def num_sample(self):
         _num_sample = 0
         try:
-            for path_csv in tqdm(self.csv_files, ascii=True):
+            pbar = tqdm(self.csv_files, ascii=True)
+            for path_csv in pbar:
                 with open(path_csv) as f:
                     _num_sample += sum(1 for line in f) - 1
+                pbar.set_description("num_sample:{}".format(_num_sample))
+                pbar.update()
         except:
             pass
 
