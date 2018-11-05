@@ -5,32 +5,65 @@ import torch
 import pandas as pd
 import numpy as np
 import cv2
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
 import util
 from constant import *
 
 
-class DatasetIterator(object):
-    """Datasetを生成するクラス"""
-    def __init__(self, csv_files, shuffle=True, **kwargs):
+class DatasetContainer(object):
+    def __init__(self, csv_files, shuffle=True, verbose=True, **kwargs):
         self.csv_files = csv_files
         self.shuffle = shuffle
+        self.verbose = verbose
         self.kwargs = kwargs
+
+    def __iter__(self):
+        return DatasetIterator(self.csv_files, self.shuffle, self.verbose, **self.kwargs)
+
+    def len_dataset(self):
+        return len(iter(self))
+
+    def batch(self, batch_size, shuffle=True, num_workers=4, epoch=None):
+        _epoch = 0
+        while True:
+            _epoch += 1
+            for dataset in self:
+                loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+                for sample in loader:
+                    yield sample
+
+            if epoch is not None and _epoch == epoch:
+                raise StopIteration
+
+
+class DatasetIterator(object):
+    """Datasetを生成するクラス"""
+    def __init__(self, csv_files, shuffle=True, verbose=True, **kwargs):
+        self.shuffle = shuffle
+        if self.shuffle:
+            csv_files = np.random.permutation(csv_files)
+        else:
+            csv_files = csv_files
+        self.csv_files = csv_files
+        self.verbose = verbose
+        self.kwargs = kwargs
+        self._cnt = 0
 
     def __len__(self):
         return len(self.csv_files)
 
     def __iter__(self):
-        if self.shuffle:
-            csv_files = np.random.permutation(self.csv_files)
-        else:
-            csv_files = self.csv_files
+        return self
 
-        for path_csv in csv_files:
-            dataset_train = QuickDrawDataset(path_csv, **self.kwargs)
-            yield dataset_train
+    def __next__(self):
+        path_csv = self.csv_files[self._cnt]
+        dataset = QuickDrawDataset(path_csv, **self.kwargs)
+        self._cnt += 1
+        if self.verbose:
+            print("Generate dataset from {} {}/{} len(dataset)={}".format(path_csv, self._cnt, len(self), len(dataset)))
+        return dataset
 
 
 class DatasetManager(object):
@@ -39,7 +72,7 @@ class DatasetManager(object):
     def __init__(self, dir_input):
         self.dir_input = dir_input
 
-    def gen_train_and_valid(self, idx_kfold, kfold, **kwargs):
+    def gen_train_and_valid(self, idx_kfold, kfold, shuffle_train=True, shuffle_valid=False, **kwargs):
 
         def _get_subset_idx(filename):
             return int(os.path.splitext(os.path.basename(filename))[0].replace('train_k', ''))
@@ -48,13 +81,11 @@ class DatasetManager(object):
         assert len(csv_files) > 0, "No csv file in {}".format(self.dir_input)
 
         csv_train, csv_valid = util.split_kfold(np.array(csv_files), idx_kfold, kfold)
-        # print("Training files: {}".format(csv_train))
-        # print("Validation files: {}".format(csv_valid))
 
-        train_datasubset_generator = DatasetIterator(csv_train, shuffle=True, **kwargs)
-        valid_datasubset_generator = DatasetIterator(csv_valid, shuffle=False, **kwargs)
+        train_dataset_container = DatasetContainer(csv_train, shuffle=shuffle_train, **kwargs)
+        valid_dataset_container = DatasetContainer(csv_valid, shuffle=shuffle_valid, **kwargs)
 
-        return train_datasubset_generator, valid_datasubset_generator
+        return train_dataset_container, valid_dataset_container
 
 
 class _ToTensor(object):

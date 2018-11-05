@@ -23,6 +23,9 @@ class OptimizerManager(object):
         self.optimizer.step()
         self.scheduler.step()
 
+    def zero_grad(self):
+        return self.optimizer.zero_grad()
+
     @property
     def lr(self):
         return self.optimizer.param_groups[0]['lr']
