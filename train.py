@@ -20,7 +20,8 @@ from constant import *
 from data import DatasetManager
 from util_train import OptimizerManager
 
-flags.DEFINE_integer("step", 1000000, help="num of train steps")
+flags.DEFINE_integer("step", None, help="num of train steps")
+flags.DEFINE_integer("epoch", None, help="num of train epoch")
 flags.DEFINE_enum("optim", 'adam', ['adam', 'sgd'], help="optimizer")
 flags.DEFINE_float("lr", 0.0001, help="learning rate")
 flags.DEFINE_list("milestones", None, help="decay milestones of learning rate")
@@ -52,6 +53,7 @@ def main(argv=None):
 
     # 画像表示テスト
     if FLAGS.debug:
+        print("num csv:{}, num sample:{}".format(train_container.num_csv(), train_container.num_sample()))
         show_images(train_container)
 
     model = create_model(pretrained=FLAGS.pretrained, architecture=FLAGS.archi)
@@ -66,7 +68,15 @@ def main(argv=None):
 
     writer = SummaryWriter(log_dir=FLAGS.log)
 
-    _ = train(model, optimizer, criterion, train_container, valid_container, total_step=FLAGS.step,
+    if FLAGS.step is not None:
+        total_step = FLAGS.step
+    elif FLAGS.epoch is not None:
+        total_step = int(np.ceil(FLAGS.epoch * train_container.num_sample() / FLAGS.batch_size))
+    else:
+        raise AssertionError("step or epoch must be specified.")
+    print("Total step is {}".format(total_step))
+
+    _ = train(model, optimizer, criterion, train_container, valid_container, total_step=total_step,
               save_interval=FLAGS.save_interval, writer=writer)
 
 
@@ -101,10 +111,10 @@ def train(model, optimizer, criterion, train_container, valid_container, total_s
     for idx_subset, _ in enumerate(range(num_subset)):
         local_loss, global_step = train_subset(model, optimizer, criterion, train_container, global_step,
                                                sub_step=save_interval, writer=writer)
-        print("Training loss:{:.6f} (step={})".format(local_loss, global_step + 1))
+        print("Training loss:{:.6f} (step={})".format(local_loss, global_step))
 
         # local_loss = validate(model, valid_container, criterion=criterion)
-        # print("Validation loss:{:.6f} (step={})".format(global_step+1, local_loss))
+        # print("Validation loss:{:.6f} (step={})".format(global_step, local_loss))
 
     return global_step
 
@@ -121,7 +131,7 @@ def train_subset(model, optimizer, criterion, train_container, global_step=0, su
         if batch_idx == sub_step:
             break
 
-        # Train sample
+        # Train batch
         ids_class, images = sample['y'].to(DEVICE), sample['image'].to(DEVICE)
         optimizer.zero_grad()
         output = model(images)
@@ -129,6 +139,7 @@ def train_subset(model, optimizer, criterion, train_container, global_step=0, su
         loss = criterion(output, ids_class)
         loss.backward()
         optimizer.step()
+        global_step += 1
         merged_loss += loss.item()
 
         # Write log for tensorboard
@@ -139,8 +150,6 @@ def train_subset(model, optimizer, criterion, train_container, global_step=0, su
         # pbar update
         pbar.set_description("step:{}, loss:{:6f}, lr:{:.2e}".format(global_step, loss, optimizer.lr))
         pbar.update()
-
-        global_step += 1
 
     torch.save(model.state_dict(), os.path.join(FLAGS.model, MODEL_FILEFORMAT.format(global_step)))
 

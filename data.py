@@ -7,6 +7,7 @@ import numpy as np
 import cv2
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
+from tqdm import tqdm
 
 import util
 from constant import *
@@ -22,8 +23,19 @@ class DatasetContainer(object):
     def __iter__(self):
         return DatasetIterator(self.csv_files, self.shuffle, self.verbose, **self.kwargs)
 
-    def len_dataset(self):
-        return len(iter(self))
+    def num_csv(self):
+        return len(self.csv_files)
+
+    def num_sample(self):
+        _num_sample = 0
+        try:
+            for path_csv in tqdm(self.csv_files, ascii=True):
+                with open(path_csv) as f:
+                    _num_sample += sum(1 for line in f) - 1
+        except:
+            pass
+
+        return _num_sample
 
     def batch(self, batch_size, shuffle=True, num_workers=4, epoch=None):
         _epoch = 0
@@ -33,6 +45,7 @@ class DatasetContainer(object):
                 loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
                 for sample in loader:
                     yield sample
+                del dataset
 
             if epoch is not None and _epoch == epoch:
                 raise StopIteration
