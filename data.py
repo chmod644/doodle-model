@@ -71,6 +71,8 @@ class DatasetIterator(object):
         return self
 
     def __next__(self):
+        if self._cnt == len(self):
+            raise StopIteration
         path_csv = self.csv_files[self._cnt]
         dataset = QuickDrawDataset(path_csv, **self.kwargs)
         self._cnt += 1
