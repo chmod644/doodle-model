@@ -1,4 +1,14 @@
 import numpy as np
+import torch
+
+
+def softmax_cross_entropy_with_logits():
+    def fn(logits, target):
+        confidence = torch.nn.functional.log_softmax(logits, 1)
+        return torch.nn.NLLLoss()(confidence, target)
+
+    return fn
+
 
 def apk(actual, predicted, k=10):
     """

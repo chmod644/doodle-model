@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
+import metrics
 from model import create_model, DEVICE
 import config
 from constant import *
@@ -22,13 +23,16 @@ from util_train import OptimizerManager
 
 flags.DEFINE_integer("step", None, help="num of train steps")
 flags.DEFINE_integer("epoch", None, help="num of train epoch")
+
+# Optimizer
 flags.DEFINE_enum("optim", 'adam', ['adam', 'sgd'], help="optimizer")
 flags.DEFINE_float("lr", 0.0001, help="learning rate")
-flags.DEFINE_list("milestones", None, help="decay milestones of learning rate")
 flags.DEFINE_float("lr_decay", 1.0, help="decay factor for learning rate")
+flags.DEFINE_list("milestones", None, help="decay milestones of learning rate")
 flags.DEFINE_float("momentum", 0.5, help="SGD momentum")
+
+# Checkpoint and log configuration
 flags.DEFINE_integer("save_interval", 10000, "inteval of step to save checkpoint")
-flags.DEFINE_bool('valid_subset', True, "whether to validate subset of dataset")
 flags.DEFINE_bool('pretrained', False, "whether to use pretrained model")
 flags.DEFINE_bool('valid', True, "whether to validate after save checkpoint")
 
@@ -47,7 +51,7 @@ def main(argv=None):
 
     dataset_manager = DatasetManager(FLAGS.input)
     train_container, valid_container = dataset_manager.gen_train_and_valid(
-        idx_kfold=FLAGS.idx_kfold, kfold=FLAGS.kfold, shuffle_train=True, shuffle_valid=True, verbose=True,
+        idx_kfold=FLAGS.idx_kfold, kfold=FLAGS.kfold, shuffle_train=True, shuffle_valid=True, verbose=False,
         # Parameters for DatasetClass
         shape=(IMG_HEIGHT, IMG_WIDTH, NUM_CHANNELS), mode='train',
         draw_first=FLAGS.draw_first, thickness=FLAGS.thickness)
@@ -64,7 +68,7 @@ def main(argv=None):
     optimizer = OptimizerManager(
         optimizer=FLAGS.optim, lr=FLAGS.lr, lr_decay=FLAGS.lr_decay, milestones=FLAGS.milestones,
         model=model, momentum=FLAGS.momentum)
-    criterion = torch.nn.NLLLoss()
+    criterion = metrics.softmax_cross_entropy_with_logits()
 
     writer = SummaryWriter(log_dir=FLAGS.log)
 
@@ -133,7 +137,6 @@ def train_subset(model, optimizer, criterion, train_loader, writer, global_step,
         ids_class, images = sample['y'].to(DEVICE), sample['image'].to(DEVICE)
         optimizer.zero_grad()
         output = model(images)
-        output = torch.nn.functional.log_softmax(output, 1)
         loss = criterion(output, ids_class)
         loss.backward()
         optimizer.step()
@@ -147,6 +150,8 @@ def train_subset(model, optimizer, criterion, train_loader, writer, global_step,
 
         # pbar update
         pbar.set_description("step:{}, train loss:{:6f}, lr:{:.2e}".format(global_step, loss, optimizer.lr))
+
+    pbar.close()
 
     torch.save(model.state_dict(), os.path.join(FLAGS.model, MODEL_FILEFORMAT.format(global_step)))
 
@@ -164,7 +169,6 @@ def validate(model, valid_loader, criterion, writer, global_step):
             break
         ids_class, images = sample['y'].to(DEVICE), sample['image'].to(DEVICE)
         output = model(images)
-        output = torch.nn.functional.log_softmax(output, 1)
         loss = criterion(output, ids_class)
         merged_loss += loss.item()
     average_loss = merged_loss / BATCH_VALID
