@@ -47,14 +47,13 @@ def main(argv=None):
     dataset_manager = DatasetManager(FLAGS.input)
     train_container, valid_container = dataset_manager.gen_train_and_valid(
         idx_kfold=FLAGS.idx_kfold, kfold=FLAGS.kfold, shuffle_train=True, shuffle_valid=True,
-        # 以下Datasetクラスに渡す引数
+        # Parameters for DatasetClass
         shape=(IMG_HEIGHT, IMG_WIDTH, NUM_CHANNELS), mode='train',
         draw_first=FLAGS.draw_first, thickness=FLAGS.thickness)
 
-    # 画像表示テスト
     if FLAGS.debug:
-        print("num csv:{}, num sample:{}".format(train_container.num_csv(), train_container.num_sample()))
         show_images(train_container)
+        sys.exit()
 
     model = create_model(pretrained=FLAGS.pretrained, architecture=FLAGS.archi)
 
@@ -81,20 +80,18 @@ def main(argv=None):
 
 
 def show_images(dataset_container):
-    for dataset_dataset in dataset_container:
-        loader = DataLoader(dataset_dataset, batch_size=1, shuffle=True, num_workers=4)
+    for dataset in dataset_container:
+        loader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=4)
         for sample in loader:
             image = np.squeeze(sample['image'].numpy()).transpose(1, 2, 0)
             y = int(sample['y'][0])
             plt.imshow(1 - image)
             plt.title("{}. {}".format(y, ID_CATEGORY_DICT[y]))
             plt.show()
-    sys.exit()
 
 
 def train(model, optimizer, criterion, train_container, valid_container, total_step, save_interval=10000, writer=None):
     """
-    1epoch分の学習。学習が終わったらvalidation setのlossを出す
 
     :param model:
     :param optimizer:
@@ -105,27 +102,26 @@ def train(model, optimizer, criterion, train_container, valid_container, total_s
     :param save_interval:
     :return:
     """
-    global_step = 0
 
+    train_loader = train_container.batch_loader(batch_size=FLAGS.batch_size, shuffle=True, num_workers=FLAGS.worker)
+    valid_loader = valid_container.batch_loader(batch_size=FLAGS.batch_size, shuffle=True, num_workers=0)
+
+    global_step = 0
     num_subset = int(np.ceil(total_step / save_interval))
     for idx_subset, _ in enumerate(range(num_subset)):
-        local_loss, global_step = train_subset(model, optimizer, criterion, train_container, global_step,
-                                               sub_step=save_interval, writer=writer)
-        print("Training loss:{:.6f} (step={})".format(local_loss, global_step))
+        _, global_step = train_subset(model, optimizer, criterion, train_loader, writer, global_step,
+                                      sub_step=save_interval)
 
-        # local_loss = validate(model, valid_container, criterion=criterion)
-        # print("Validation loss:{:.6f} (step={})".format(global_step, local_loss))
+        _ = validate(model, valid_loader, criterion, writer, global_step)
 
     return global_step
 
 
-def train_subset(model, optimizer, criterion, train_container, global_step=0, sub_step=10000, writer=None):
+def train_subset(model, optimizer, criterion, train_loader, writer, global_step, sub_step):
     model.train()
     merged_loss = 0.
 
-    pbar = tqdm(
-        train_container.batch(batch_size=FLAGS.batch_size, shuffle=True, num_workers=4),
-        ascii=True, total=sub_step)
+    pbar = tqdm(train_loader, ascii=True, total=sub_step)
 
     for batch_idx, sample in enumerate(pbar):
         if batch_idx == sub_step:
@@ -148,7 +144,7 @@ def train_subset(model, optimizer, criterion, train_container, global_step=0, su
             writer.add_scalar('lr', optimizer.lr, global_step)
 
         # pbar update
-        pbar.set_description("step:{}, loss:{:6f}, lr:{:.2e}".format(global_step, loss, optimizer.lr))
+        pbar.set_description("step:{}, train loss:{:6f}, lr:{:.2e}".format(global_step, loss, optimizer.lr))
         pbar.update()
 
     torch.save(model.state_dict(), os.path.join(FLAGS.model, MODEL_FILEFORMAT.format(global_step)))
@@ -157,11 +153,10 @@ def train_subset(model, optimizer, criterion, train_container, global_step=0, su
     return average_loss, global_step
 
 
-def validate(model, valid_container, criterion):
+def validate(model, valid_loader, criterion, writer, global_step):
     model.eval()
     merged_loss = 0
-    pbar = tqdm(valid_container.batch(batch_size=FLAGS.batch_size, shuffle=True, num_workers=1),
-                ascii=True, total=BATCH_VALID)
+    pbar = tqdm(valid_loader, ascii=True, total=BATCH_VALID)
     for batch_idx, sample in enumerate(pbar):
         if batch_idx == BATCH_VALID:
             break
@@ -172,6 +167,8 @@ def validate(model, valid_container, criterion):
         merged_loss += loss.item()
         pbar.update()
     average_loss = merged_loss / BATCH_VALID
+    print("step:{}, valid loss:{:6f}".format(global_step, average_loss))
+    writer.add_scalar('val_loss', average_loss, global_step)
     return average_loss
 
 

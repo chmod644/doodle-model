@@ -40,7 +40,7 @@ class DatasetContainer(object):
 
         return _num_sample
 
-    def batch(self, batch_size, shuffle=True, num_workers=4, epoch=None):
+    def batch_loader(self, batch_size, shuffle=True, num_workers=4, epoch=None):
         _epoch = 0
         while True:
             _epoch += 1
