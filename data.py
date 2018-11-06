@@ -34,7 +34,6 @@ class DatasetContainer(object):
                 with open(path_csv) as f:
                     _num_sample += sum(1 for line in f) - 1
                 pbar.set_description("num_sample:{}".format(_num_sample))
-                pbar.update()
         except:
             pass
 
@@ -90,7 +89,7 @@ class DatasetManager(object):
     def __init__(self, dir_input):
         self.dir_input = dir_input
 
-    def gen_train_and_valid(self, idx_kfold, kfold, shuffle_train=True, shuffle_valid=False, **kwargs):
+    def gen_train_and_valid(self, idx_kfold, kfold, shuffle_train=True, shuffle_valid=False, verbose=False, **kwargs):
 
         def _get_subset_idx(filename):
             return int(os.path.splitext(os.path.basename(filename))[0].replace('train_k', ''))
@@ -100,8 +99,8 @@ class DatasetManager(object):
 
         csv_train, csv_valid = util.split_kfold(np.array(csv_files), idx_kfold, kfold)
 
-        train_dataset_container = DatasetContainer(csv_train, shuffle=shuffle_train, **kwargs)
-        valid_dataset_container = DatasetContainer(csv_valid, shuffle=shuffle_valid, **kwargs)
+        train_dataset_container = DatasetContainer(csv_train, shuffle=shuffle_train, verbose=verbose, **kwargs)
+        valid_dataset_container = DatasetContainer(csv_valid, shuffle=shuffle_valid, verbose=verbose, **kwargs)
 
         return train_dataset_container, valid_dataset_container
 

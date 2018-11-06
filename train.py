@@ -30,6 +30,7 @@ flags.DEFINE_float("momentum", 0.5, help="SGD momentum")
 flags.DEFINE_integer("save_interval", 10000, "inteval of step to save checkpoint")
 flags.DEFINE_bool('valid_subset', True, "whether to validate subset of dataset")
 flags.DEFINE_bool('pretrained', False, "whether to use pretrained model")
+flags.DEFINE_bool('valid', True, "whether to validate after save checkpoint")
 
 FLAGS = flags.FLAGS
 
@@ -46,7 +47,7 @@ def main(argv=None):
 
     dataset_manager = DatasetManager(FLAGS.input)
     train_container, valid_container = dataset_manager.gen_train_and_valid(
-        idx_kfold=FLAGS.idx_kfold, kfold=FLAGS.kfold, shuffle_train=True, shuffle_valid=True,
+        idx_kfold=FLAGS.idx_kfold, kfold=FLAGS.kfold, shuffle_train=True, shuffle_valid=True, verbose=True,
         # Parameters for DatasetClass
         shape=(IMG_HEIGHT, IMG_WIDTH, NUM_CHANNELS), mode='train',
         draw_first=FLAGS.draw_first, thickness=FLAGS.thickness)
@@ -112,7 +113,8 @@ def train(model, optimizer, criterion, train_container, valid_container, total_s
         _, global_step = train_subset(model, optimizer, criterion, train_loader, writer, global_step,
                                       sub_step=save_interval)
 
-        _ = validate(model, valid_loader, criterion, writer, global_step)
+        if FLAGS.valid:
+            _ = validate(model, valid_loader, criterion, writer, global_step)
 
     return global_step
 
@@ -145,7 +147,6 @@ def train_subset(model, optimizer, criterion, train_loader, writer, global_step,
 
         # pbar update
         pbar.set_description("step:{}, train loss:{:6f}, lr:{:.2e}".format(global_step, loss, optimizer.lr))
-        pbar.update()
 
     torch.save(model.state_dict(), os.path.join(FLAGS.model, MODEL_FILEFORMAT.format(global_step)))
 
@@ -158,15 +159,16 @@ def validate(model, valid_loader, criterion, writer, global_step):
     merged_loss = 0
     pbar = tqdm(valid_loader, ascii=True, total=BATCH_VALID)
     for batch_idx, sample in enumerate(pbar):
+        pbar.set_description("validation {}/{}".format(batch_idx, BATCH_VALID))
         if batch_idx == BATCH_VALID:
             break
         ids_class, images = sample['y'].to(DEVICE), sample['image'].to(DEVICE)
         output = model(images)
-        output = torch.nn.functional.log_softmax(output)
+        output = torch.nn.functional.log_softmax(output, 1)
         loss = criterion(output, ids_class)
         merged_loss += loss.item()
-        pbar.update()
     average_loss = merged_loss / BATCH_VALID
+    pbar.clear()
     print("step:{}, valid loss:{:6f}".format(global_step, average_loss))
     writer.add_scalar('val_loss', average_loss, global_step)
     return average_loss
