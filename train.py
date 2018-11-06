@@ -115,7 +115,7 @@ def train(model, optimizer, criterion, train_container, valid_container, total_s
     num_subset = int(np.ceil(total_step / save_interval))
     for idx_subset, _ in enumerate(range(num_subset)):
         _, global_step = train_subset(model, optimizer, criterion, train_loader, writer, global_step,
-                                      sub_step=save_interval)
+                                      sub_step=min(save_interval, total_step-idx_subset*save_interval))
 
         if FLAGS.valid:
             _ = validate(model, valid_loader, criterion, writer, global_step)
