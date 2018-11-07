@@ -122,16 +122,27 @@ class _Normalize(object):
         return sample
 
 
+class _InverseNegPos(object):
+    def __call__(self, sample):
+        sample['image'] = 1. - sample['image']
+        return sample
+
+
 class QuickDrawDataset(Dataset):
 
-    def __init__(self, path_csv, shape=(256, 256, 3), transform=transforms.Compose([_ToTensor(), _Normalize()]),
-                 mode='train', thickness=6, draw_first=True):
+    def __init__(self, path_csv, shape=(256, 256, 3),
+                 mode='train', thickness=6, draw_first=True, white_background=False):
         self.dataframe = pd.read_csv(path_csv)
         self.shape = shape
-        self.transform = transform
         self.mode = mode
         self.thickness = thickness
         self.draw_first = draw_first
+
+        _transforms = [_ToTensor(), _Normalize()]
+        if white_background:
+            _transforms.append(_InverseNegPos())
+
+        self.transform = transforms.Compose(_transforms)
 
     def __len__(self):
         return len(self.dataframe.index)
@@ -201,8 +212,8 @@ def _draw_image_resize(strokes, shape=(256, 256, 3), thickness=6, time_color=Tru
             _ = cv2.line(img, (stroke[0][i], stroke[1][i]),
                          (stroke[0][i + 1], stroke[1][i + 1]), color, thickness)
     if shape[0] != ORIG_HEIGHT or shape[1] != ORIG_WIDTH:
-        return (127 - (255 - cv2.resize(img, shape[:2]))) / 127
+        return cv2.resize(img, shape[:2])
     else:
-        return (127 - (255 - img)) / 127
+        return img
 
 

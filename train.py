@@ -5,6 +5,7 @@ import os
 
 import sys
 from pprint import pprint
+from builtins import range
 
 import numpy as np
 from absl import app, flags
@@ -25,7 +26,7 @@ flags.DEFINE_integer("step", None, help="num of train steps")
 flags.DEFINE_integer("epoch", None, help="num of train epoch")
 
 # Optimizer
-flags.DEFINE_enum("optim", 'adam', ['adam', 'sgd'], help="optimizer")
+flags.DEFINE_enum("optimizer", "adam", enum_values=["adam", "sgd"], help="optimizer")
 flags.DEFINE_float("lr", 0.0001, help="learning rate")
 flags.DEFINE_float("lr_decay", 1.0, help="decay factor for learning rate")
 flags.DEFINE_list("milestones", None, help="decay milestones of learning rate")
@@ -53,8 +54,8 @@ def main(argv=None):
     train_container, valid_container = dataset_manager.gen_train_and_valid(
         idx_kfold=FLAGS.idx_kfold, kfold=FLAGS.kfold, shuffle_train=True, shuffle_valid=True, verbose=False,
         # Parameters for DatasetClass
-        shape=(IMG_HEIGHT, IMG_WIDTH, NUM_CHANNELS), mode='train',
-        draw_first=FLAGS.draw_first, thickness=FLAGS.thickness)
+        shape=(FLAGS.img_height, FLAGS.img_width, NUM_CHANNELS), mode='train',
+        draw_first=FLAGS.draw_first, thickness=FLAGS.thickness, white_background=FLAGS.white_background)
 
     if FLAGS.debug:
         show_images(train_container)
@@ -66,7 +67,7 @@ def main(argv=None):
         print(model, file=f)
 
     optimizer = OptimizerManager(
-        optimizer=FLAGS.optim, lr=FLAGS.lr, lr_decay=FLAGS.lr_decay, milestones=FLAGS.milestones,
+        optimizer=FLAGS.optimizer, lr=FLAGS.lr, lr_decay=FLAGS.lr_decay, milestones=FLAGS.milestones,
         model=model, momentum=FLAGS.momentum)
     criterion = metrics.softmax_cross_entropy_with_logits()
 
@@ -74,14 +75,15 @@ def main(argv=None):
 
     if FLAGS.step is not None:
         total_step = FLAGS.step
+        total_epoch = None
     elif FLAGS.epoch is not None:
-        total_step = int(np.ceil(FLAGS.epoch * train_container.num_sample() / FLAGS.batch_size))
+        total_step = np.iinfo(np.int32).max
+        total_epoch = FLAGS.epoch
     else:
         raise AssertionError("step or epoch must be specified.")
-    print("Total step is {}".format(total_step))
 
-    _ = train(model, optimizer, criterion, train_container, valid_container, total_step=total_step,
-              save_interval=FLAGS.save_interval, writer=writer)
+    _ = train(model, optimizer, criterion, train_container, valid_container,
+              total_step=total_step, total_epoch=total_epoch, save_interval=FLAGS.save_interval, writer=writer)
 
 
 def show_images(dataset_container):
@@ -95,30 +97,38 @@ def show_images(dataset_container):
             plt.show()
 
 
-def train(model, optimizer, criterion, train_container, valid_container, total_step, save_interval=10000, writer=None):
+def train(model, optimizer, criterion, train_container, valid_container, total_step, total_epoch,
+          save_interval, writer):
     """
 
     :param model:
     :param optimizer:
     :param criterion:
     :param total_step:
+    :param total_epoch:
     :param train_container:
     :param valid_container:
     :param save_interval:
+    :param writer:
     :return:
     """
 
-    train_loader = train_container.batch_loader(batch_size=FLAGS.batch_size, shuffle=True, num_workers=FLAGS.worker)
+    train_loader = train_container.batch_loader(batch_size=FLAGS.batch_size, shuffle=True, num_workers=FLAGS.worker, epoch=total_epoch)
     valid_loader = valid_container.batch_loader(batch_size=FLAGS.batch_size, shuffle=True, num_workers=0)
 
     global_step = 0
     num_subset = int(np.ceil(total_step / save_interval))
-    for idx_subset, _ in enumerate(range(num_subset)):
-        _, global_step = train_subset(model, optimizer, criterion, train_loader, writer, global_step,
-                                      sub_step=min(save_interval, total_step-idx_subset*save_interval))
+    for idx_subset in range(num_subset):
+        sub_step = min(save_interval, total_step-idx_subset*save_interval)
+
+        global_step, is_limit = train_subset(
+            model, optimizer, criterion, train_loader, writer, global_step, sub_step=sub_step)
 
         if FLAGS.valid:
-            _ = validate(model, valid_loader, criterion, writer, global_step)
+            validate(model, valid_loader, criterion, writer, global_step)
+
+        if is_limit:
+            break
 
     return global_step
 
@@ -129,34 +139,39 @@ def train_subset(model, optimizer, criterion, train_loader, writer, global_step,
 
     pbar = tqdm(train_loader, ascii=True, total=sub_step)
 
-    for batch_idx, sample in enumerate(pbar):
-        if batch_idx == sub_step:
-            break
+    try:
+        for batch_idx, sample in enumerate(pbar):
+            if batch_idx == sub_step:
+                break
 
-        # Train batch
-        ids_class, images = sample['y'].to(DEVICE), sample['image'].to(DEVICE)
-        optimizer.zero_grad()
-        output = model(images)
-        loss = criterion(output, ids_class)
-        loss.backward()
-        optimizer.step()
-        global_step += 1
-        merged_loss += loss.item()
+            # Train batch
+            ids_class, images = sample['y'].to(DEVICE), sample['image'].to(DEVICE)
+            optimizer.zero_grad()
+            output = model(images)
+            loss = criterion(output, ids_class)
+            loss.backward()
+            optimizer.step()
+            global_step += 1
+            merged_loss += loss.item()
 
-        # Write log for tensorboard
-        if global_step % LOG_INTERVAL == 0:
-            writer.add_scalar('loss', loss, global_step)
-            writer.add_scalar('lr', optimizer.lr, global_step)
+            # Write log for tensorboard
+            if global_step % LOG_INTERVAL == 0:
+                writer.add_scalar('loss', loss, global_step)
+                writer.add_scalar('lr', optimizer.lr, global_step)
 
-        # pbar update
-        pbar.set_description("step:{}, train loss:{:6f}, lr:{:.2e}".format(global_step, loss, optimizer.lr))
+            # pbar update
+            pbar.set_description("step:{}, train loss:{:6f}, lr:{:.2e}".format(global_step, loss, optimizer.lr))
+
+    except RuntimeError as e:
+        print("Total epoch reached to limit at {} step".format(global_step))
+        torch.save(model.state_dict(), os.path.join(FLAGS.model, MODEL_FILEFORMAT.format(global_step)))
+        return global_step, True
 
     pbar.close()
 
     torch.save(model.state_dict(), os.path.join(FLAGS.model, MODEL_FILEFORMAT.format(global_step)))
 
-    average_loss = merged_loss / sub_step
-    return average_loss, global_step
+    return global_step, False
 
 
 def validate(model, valid_loader, criterion, writer, global_step):
@@ -164,18 +179,15 @@ def validate(model, valid_loader, criterion, writer, global_step):
     merged_loss = 0
     pbar = tqdm(valid_loader, ascii=True, total=BATCH_VALID)
     for batch_idx, sample in enumerate(pbar):
-        pbar.set_description("validation {}/{}".format(batch_idx, BATCH_VALID))
         if batch_idx == BATCH_VALID:
             break
         ids_class, images = sample['y'].to(DEVICE), sample['image'].to(DEVICE)
         output = model(images)
         loss = criterion(output, ids_class)
         merged_loss += loss.item()
-    average_loss = merged_loss / BATCH_VALID
-    pbar.clear()
-    print("step:{}, valid loss:{:6f}".format(global_step, average_loss))
-    writer.add_scalar('val_loss', average_loss, global_step)
-    return average_loss
+        average_loss = merged_loss / (batch_idx+1)
+        pbar.set_description("step:{}, valid loss:{:6f}".format(global_step, average_loss))
+    pbar.close()
 
 
 if __name__ == '__main__':

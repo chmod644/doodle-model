@@ -30,8 +30,9 @@ def main(argv=None):
     model = load_pth(model, FLAGS.model)
 
     path_test = FLAGS.input
-    dataset = QuickDrawDataset(path_test, shape=(IMG_HEIGHT, IMG_WIDTH, NUM_CHANNELS), mode='test',
-                               draw_first=FLAGS.draw_first, thickness=FLAGS.thickness)
+    dataset = QuickDrawDataset(path_test, shape=(FLAGS.img_height, FLAGS.img_width, NUM_CHANNELS), mode='test',
+                               draw_first=FLAGS.draw_first, thickness=FLAGS.thickness,
+                               white_background=FLAGS.white_background)
     test_loader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=4)
 
     categories_dict = get_submitname_dict()

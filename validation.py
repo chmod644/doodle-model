@@ -25,8 +25,8 @@ def main(argv=None):
     _, valid_dataset_container = dataset_manager.gen_train_and_valid(
         idx_kfold=FLAGS.idx_kfold, kfold=FLAGS.kfold,
         # 以下Datasetクラスに渡す引数
-        shape=(IMG_HEIGHT, IMG_WIDTH, NUM_CHANNELS), mode='train',
-        draw_first=FLAGS.draw_first, thickness=FLAGS.thickness)
+        shape=(FLAGS.img_height, FLAGS.img_width, NUM_CHANNELS), mode='train',
+        draw_first=FLAGS.draw_first, thickness=FLAGS.thickness, white_background=FLAGS.white_background)
 
     total_correct = 0
     num_sample = 0
