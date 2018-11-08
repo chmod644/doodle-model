@@ -32,7 +32,7 @@ def main(argv=None):
     path_test = FLAGS.input
     dataset = QuickDrawDataset(path_test, shape=(FLAGS.img_height, FLAGS.img_width, NUM_CHANNELS), mode='test',
                                draw_first=FLAGS.draw_first, thickness=FLAGS.thickness,
-                               white_background=FLAGS.white_background)
+                               white_background=FLAGS.white_background, draw_contour=FLAGS.draw_contour, draw_contour_version=FLAGS.draw_contour_version)
     test_loader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=4)
 
     categories_dict = get_submitname_dict()

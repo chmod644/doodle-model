@@ -26,7 +26,7 @@ def main(argv=None):
         idx_kfold=FLAGS.idx_kfold, kfold=FLAGS.kfold,
         # 以下Datasetクラスに渡す引数
         shape=(FLAGS.img_height, FLAGS.img_width, NUM_CHANNELS), mode='train',
-        draw_first=FLAGS.draw_first, thickness=FLAGS.thickness, white_background=FLAGS.white_background)
+        draw_first=FLAGS.draw_first, thickness=FLAGS.thickness, white_background=FLAGS.white_background, draw_contour=FLAGS.draw_contour, draw_contour_version=FLAGS.draw_contour_version)
 
     total_correct = 0
     num_sample = 0

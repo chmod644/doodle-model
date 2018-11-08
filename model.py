@@ -35,14 +35,14 @@ def create_model(pretrained=True, architecture="resnet34", is_train=True):
         model = MobileNetV2.MobileNetV2(n_class=NUM_CATEGORY, input_size=IMG_HEIGHT)
     elif architecture == "se_resnet50":
         if pretrained:
-            model = great_networks.se_resnet50()
+            model = great_networks.se_resnet50(pretrained=pretrained)
             model.last_linear = torch.nn.Linear(512 * 4, NUM_CATEGORY)
         else:
             model = great_networks.se_resnet50(num_classes=NUM_CATEGORY, pretrained=None)
         model.avg_pool = torch.nn.AdaptiveAvgPool2d(1)
     elif architecture == "se_resnext50":
         if pretrained:
-            model = great_networks.se_resnext50_32x4d()
+            model = great_networks.se_resnext50_32x4d(pretrained=pretrained)
             model.last_linear = torch.nn.Linear(512 * 4, NUM_CATEGORY)
         else:
             model = great_networks.se_resnext50_32x4d(num_classes=NUM_CATEGORY, pretrained=None)

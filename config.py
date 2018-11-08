@@ -17,3 +17,6 @@ flags.DEFINE_integer("kfold", 5, "num split to k-fold validation")
 flags.DEFINE_integer('thickness', 1, "stroke thickness")
 flags.DEFINE_bool('draw_first', False, "whether to draw image before resize")
 flags.DEFINE_bool('white_background', False, "whether to draw strokes on white background")
+
+flags.DEFINE_bool('draw_contour', False, "whether to draw strokes on contour color")
+flags.DEFINE_integer('draw_contour_version', 0, "select coloring version, if that is 0 use the automatically latest version")

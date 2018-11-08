@@ -10,6 +10,21 @@ def softmax_cross_entropy_with_logits():
     return fn
 
 
+
+
+def map3():
+    ARR_SCORE_BASE = torch.tensor(np.asarray([1.0, 1.0 / 2.0, 1.0 / 3.0]))
+    def fn(logits, target):
+        val_logits_top_k, idx_logits_top_k = torch.topk(logits, 3)
+        idx_logits_top_k = idx_logits_top_k.t()
+        correct = idx_logits_top_k.eq(target.view(1, -1).expand_as(idx_logits_top_k))
+        pred = torch.sum(correct, dim=1).type(torch.DoubleTensor)
+        score = torch.sum(torch.mul(pred, ARR_SCORE_BASE))
+        return score
+
+    return fn
+
+
 def apk(actual, predicted, k=10):
     """
     Computes the average precision at k.
